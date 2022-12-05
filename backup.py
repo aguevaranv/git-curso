@@ -49,10 +49,10 @@ N_MONTHS_AGO     = 12                    # nº de copias mensuales que se almace
 DUMPER           = """ pg_dump --no-privileges --no-owner --no-reconnect -h 10.128.37.70 -p 5434 -U %s -f %s -F c %s  """                  
 
 # MEGA
-MEGA             = False                     # True = sube los archivos generados a la cuenta MEGA indicada
-MEGA_EMAIL       = 'mega@email.com'         # Email de MEGA
-MEGA_PASSWORD    = 'megapass'               # Password de MEGA
-MEGA_FOLDER      = 'megafolder'             # Directorio donde subir los backup en MEGA
+MEGA             = True                     # True = sube los archivos generados a la cuenta MEGA indicada
+MEGA_EMAIL       = 'amguevarac@hotmail.com'         # Email de MEGA
+MEGA_PASSWORD    = 'Am11062009'               # Password de MEGA
+MEGA_FOLDER      = '/backup'             # Directorio donde subir los backup en MEGA
 
 def log(string):
     print (time.strftime('%Y-%m-%d-%H-%M-%S', time.gmtime()) + ': ' + str(string))
