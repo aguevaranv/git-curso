@@ -1,0 +1,106 @@
+#!/usr/bin/python3.7
+# -*- coding: utf-8 -*-
+import os
+import sys
+import re
+import json
+from os import walk
+import logging
+from datetime import *
+import psycopg2
+_logger = logging.getLogger(__name__)
+
+class db_actions(object):
+    
+    def _db_connect(self,args):
+        try:
+            conn = psycopg2.connect("host='%s' port='%s' dbname='%s' user='%s' password='%s'"
+                        % (args['host'], args['port'], args['db'], args['user'], args['passwd']))
+            return conn.cursor()
+        except:
+            conn = "No conecta"
+        return conn
+    
+    def db_list(self,args):
+        try:
+            cr = self._db_connect(args)
+            cr.execute("select * from pg_database where datname not in ('postgres','template0','template1')")
+            return cr.fetchall()
+        except:
+            return 'Falló la conexión para listado de bases de datos.'
+        return True
+    
+    def db_dump(self,db,args,bdir):
+        date_today = datetime.strptime(str(date.today()), '%Y-%m-%d').date()
+        cmd_pg_dump = "PGPASSWORD='%s' pg_dump %s -h %s -p %s -U %s --disable-triggers -f %s/%s_%s.sql" % (args['passwd'], db, args['host'], args['port'], args['user'], bdir, db, date_today)
+        try:
+            os.system(cmd_pg_dump)
+        except:
+            print ('No se realizó respaldo de base de datos: %s' % (args[2]))
+        return True
+
+def clean_dir(bdir, hdays):
+    for path, dname, fname in os.walk(bdir):
+        for f in fname:
+            if re.match(r'.*.sql', f, re.I):
+                date_issueT = f.split('.')[0][-10:]
+                date_issueD = datetime.strptime(date_issueT, "%Y-%m-%d").date()
+                date_todayT = datetime.now().strftime("%Y-%m-%d")
+                date_todayD = datetime.strptime(date_todayT, "%Y-%m-%d").date()
+                record = (date_todayD - date_issueD).days
+                if record > hdays:
+                    os.remove('%s/%s' % (path,f))
+    return True
+
+def main():
+    ''' Declaración y validación de variables para sistema operativo
+    '''
+    pgsql_config = '/etc/postgresql/pgbackup.conf'
+    action = db_actions()
+    opt = sys.argv[:] or []
+    if os.path.isfile(pgsql_config):
+        #--- Cargar variables globales de archivo de configuración ---#
+        fconf_r = open(pgsql_config,'r')
+        line = fconf_r.readline()
+        content = ''
+        while len(line) > 0:
+            l = line.strip()
+            line = fconf_r.readline()
+            content += l.replace("'",'"')
+        gvals = json.loads(content)
+        fconf_r.close()
+        if not os.path.exists(gvals['backup_dir']):
+            os.mkdir(gvals['backup_dir'],mode=0o775)
+        if '-l' in opt:
+            #--- Listar bases de datos ---#
+            for i in gvals['instances']:
+                cont = 1
+                print ('Instancia: %s:%s' % (i['host'],i['port']))
+                for d in action.db_list(i):
+                    print ('%s. %s' % (cont,d[0]))
+                    cont += 1
+        elif '-d' in opt:
+            #--- Respaldar bases de datos ---#
+            for i in gvals['instances']:
+                backuphost = '%s/%s' % (gvals['backup_dir'],i['host'])
+                backupinst = '%s/%s' % (backuphost,i['port'])
+                if not os.path.exists(backuphost):
+                    os.mkdir(backuphost, mode=0o755)
+                if not os.path.exists(backupinst):
+                    os.mkdir(backupinst, mode=0o755)
+                for d in action.db_list(i):
+                    action.db_dump(d[0],i,backupinst)
+        elif '-c' in opt:
+            #--- Limpiar directorio dejar un histórico de 15 días ---#
+            clean_dir(gvals['backup_dir'], gvals['history_days'])
+        else:
+            print ("""Ingrese un argumento válido:\n
+ pgbackup -l\t\tListar bases de datos existentes en PostgreSQL.
+ pgbackup -d\t\tRespaldar, hacer dump de todas las bases de datos.
+ pgbackup -c\t\tLimpiar o borrar archivos con más de 15 días de antiguedad.\n""")
+    else:
+        print ("""No existe el archivo: /etc/postgresql/pgbackup.conf\nGenere el archivo correspondiante para el usuario en cuestión.
+Sino, ingrese como usuario postgres para usar las funciones de este comando.""")
+
+if __name__ == '__main__':
+    main()
